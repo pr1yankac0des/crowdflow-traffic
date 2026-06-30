@@ -208,15 +208,47 @@ def _load_osm_graph() -> nx.Graph:
     return g
 
 
+def _get_zone_edge_index(g: nx.Graph) -> dict[str, list[tuple[str, str]]]:
+    """
+    Precomputed zone_id -> [edges] lookup, built once per graph and cached
+    on the graph object itself (g.graph persists across calls since
+    get_graph() is lru_cached, so this only runs once per process).
+
+    This exists because update_zone_congestion() used to scan every edge
+    in the whole graph on every call to find the ones touching a given
+    zone. That's fine on the small demo network (~200 edges total) but
+    catastrophic on the real OSM graph (~198,788 edges): with 24 zones
+    updated every 2-second tick, the naive scan does roughly 24 * 198,788
+    ≈ 4.8 million edge checks every tick, forever - enough to peg a
+    free-tier CPU and make every request (including the websocket
+    handshake) time out, which is exactly what surfaced as a confusing
+    "CORS error" in the browser once this ran in production against real
+    data instead of the small demo graph.
+    """
+    idx = g.graph.get("_zone_edge_index")
+    if idx is None:
+        idx = {}
+        for u, v in g.edges():
+            zu = g.nodes[u].get("zone_id")
+            zv = g.nodes[v].get("zone_id")
+            if zu:
+                idx.setdefault(zu, []).append((u, v))
+            if zv and zv != zu:
+                idx.setdefault(zv, []).append((u, v))
+        g.graph["_zone_edge_index"] = idx
+    return idx
+
+
 def update_zone_congestion(zone_id: str, congestion_score: float):
     """Called by the simulation/CV layer to push live congestion onto every
     edge whose endpoints fall in this zone. multiplier ranges ~1.0 (free
-    flow) to ~4.0 (gridlock)."""
+    flow) to ~4.0 (gridlock). O(edges in this zone) via the precomputed
+    index above, not O(all edges in the graph)."""
     g = get_graph()
     multiplier = 1.0 + (congestion_score / 100.0) * 3.0
-    for u, v, data in g.edges(data=True):
-        if g.nodes[u].get("zone_id") == zone_id or g.nodes[v].get("zone_id") == zone_id:
-            data["congestion_multiplier"] = multiplier
+    idx = _get_zone_edge_index(g)
+    for u, v in idx.get(zone_id, []):
+        g[u][v]["congestion_multiplier"] = multiplier
 
 
 def _nearest_node(g: nx.Graph, lat: float, lon: float) -> str:
