@@ -1,0 +1,24 @@
+# --- Core (required, lightweight, demo_mode works with just these) ---
+# Version floors below are chosen specifically so Python 3.14 has prebuilt
+# wheels available (no C/Rust compiler needed). If you're on Python 3.11-3.13
+# these same floors still work fine.
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.6,<1.0.0
+pydantic>=2.12.0,<3.0.0
+pydantic-settings>=2.7.0,<3.0.0
+networkx>=3.3,<4.0
+numpy>=2.3.2,<3.0.0
+websockets>=13.1
+python-multipart>=0.0.9
+
+# --- Production CV (only needed when CROWDFLOW_DEMO_MODE=False) ---
+# ultralytics==8.2.103
+# torch==2.4.1           # CPU build is fine for YOLOv8n; see https://pytorch.org/get-started/locally/
+# opencv-python-headless==4.10.0.84
+
+# --- Production routing from real OpenStreetMap data (only needed when CROWDFLOW_DEMO_MODE=False) ---
+# Version floors, not exact pins - same lesson as numpy/pydantic above: an
+# old pinned version can predate your Python version's wheel support and
+# force a from-source build that needs a C/Rust compiler you don't have.
+# osmnx>=2.1.0
+# geopandas>=1.0.0
